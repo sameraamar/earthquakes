@@ -13,8 +13,7 @@ outputs/*
 !outputs/*-sample.html
 
 # IDE
-.vscode/*
-!.vscode/settings.json
+.vscode/
 .idea/
 
 # Playwright MCP scratch
