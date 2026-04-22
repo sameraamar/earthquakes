@@ -8,12 +8,20 @@ venv/
 
 # Data + outputs
 data/
-outputs/
+outputs/*
+# but keep curated sample HTML committed for the README screenshots
+!outputs/*-sample.html
 
 # IDE
 .vscode/*
 !.vscode/settings.json
 .idea/
+
+# Playwright MCP scratch
+.playwright-mcp/
+
+# Local scratch
+temp/
 
 # OS
 Thumbs.db

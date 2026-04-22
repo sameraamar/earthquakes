@@ -51,7 +51,9 @@ src/earthquakes/
 CLI commands:
 - `info`     — schema + summary stats
 - `viz`      — generate `outputs/map.html` and `outputs/timeline.html`
-- `predict`  — train baseline model and print metrics
+- `predict`  — train baseline model, report MAE, and forecast one shared next month;
+               optional `--max yyyyMM` caps training data to that month and forecasts
+               the immediately following month
 
 ## Tech stack
 - Python 3.11+
@@ -62,11 +64,22 @@ CLI commands:
 - scikit-learn (baseline regressor)
 
 ## Data
-- Source: Kaggle dataset
-  `alessandrolobello/the-ultimate-earthquake-dataset-from-1990-2023`.
+- Sources (each row carries a `source` column with one or more codes,
+  comma-separated when an event appears in multiple sources):
+  - `LOBELLO` — Kaggle `alessandrolobello/the-ultimate-earthquake-dataset-from-1990-2023` (1990–2023).
+  - `GAURAV2025` — Kaggle `gauravkumar2525/global-earthquake-dataset-2015-2025` (2015–2025).
+- Source codes: short, uppercase, alphanumeric, ≤10 characters.
 - Auth: `KAGGLE_USERNAME` + `KAGGLE_KEY` env vars (or `~/.kaggle/kaggle.json`).
 - Schema is discovered at load time; loader normalizes common columns
-  (`time`, `latitude`, `longitude`, `depth`, `magnitude`).
+  (`time`, `latitude`, `longitude`, `depth`, `magnitude`, `place`).
+- Deduplication key when merging sources: `(time floored to second,
+  latitude rounded to 0.01°, longitude rounded to 0.01°)`.
+- Secondary source (historical/impact): NOAA NCEI/WDS Global Significant
+  Earthquake Database (2150 BC -> present, ~5,700 events), fetched via the
+  Hazel public API. Adds socio-economic fields (deaths, damage $, houses
+  destroyed) and tsunami linkage. Registered as the `NOAA_SIG` source in
+  the existing multi-source registry in `src/earthquakes/data_loader.py`;
+  opt-in via `load(sources=("LOBELLO", "GAURAV2025", "NOAA_SIG"))`. See task D.1.
 
 ## Constraints / edge cases
 - Dataset is large; sample for the map (configurable, default 20k rows).

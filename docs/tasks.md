@@ -70,6 +70,8 @@ AI agents must read this before implementing and update it after completing work
 ### 2.1 Improve model
 - Status: [ ]
 - Acceptance criteria: TBD
+- Notes: `predict --max` now requires strict `yyyyMM` and forecasts a single
+  global next month; remaining model-quality improvements still open.
 - Dependencies: 1.4
 
 ### 2.2 Tests
@@ -79,3 +81,48 @@ AI agents must read this before implementing and update it after completing work
 
 ## Discovered tasks
 <!-- Add new tasks here as they emerge. -->
+
+### D.1 Add second data source (`GAURAV2025`)
+- Status: [x]
+- Started: 2026-04-22
+- Completed: 2026-04-22
+- Acceptance criteria:
+    - `data_loader` loads multiple Kaggle datasets and tags each row with a
+      short uppercase `source` code (≤10 chars).
+    - When the same event appears in multiple sources, codes are joined with
+      commas (e.g. `LOBELLO,GAURAV2025`).
+    - README cites both sources.
+- Notes: dedup key = (time floored to second, lat 0.01°, lon 0.01°).
+- Dependencies: 1.2
+
+### D.1 Add NOAA significant-earthquake dataset as secondary source
+- Status: [x]
+- Started: 2026-04-22
+- Completed: 2026-04-22
+- Acceptance criteria:
+    - NOAA NCEI/WDS Significant Earthquake Database (2150 BC -> present,
+      ~5,700 events) is registered in the existing multi-source registry
+      (`SOURCES["NOAA_SIG"]`) and fetched via the public Hazel API.
+    - Loaded rows are normalized to the canonical schema
+      (`time, latitude, longitude, depth, magnitude, place, source`) and
+      flow through the same `_load_one` / `_merge_sources` pipeline as the
+      Kaggle sources, so per-row provenance via `source` is preserved.
+    - Pre-1678 rows are dropped (their `time` is `NaT`) by the standard
+      required-column filter in `_load_one`.
+- Validation: `load(sources=("NOAA_SIG",), refresh=True)` returns a
+  non-empty DataFrame whose `source` column equals `"NOAA_SIG"`.
+- Notes: Opt-in — not in `DEFAULT_SOURCES` to keep the existing parquet
+  cache stable. CLI flag for selecting sources, viz overlay for impact
+  fields (deaths/damage/tsunami), and tests remain follow-up work (D.2).
+- Dependencies: 1.2
+
+### D.2 Wire NOAA source into CLI + viz overlay
+- Status: [ ]
+- Acceptance criteria:
+    - `info` / `viz` / `predict` accept a `--sources` flag selecting any
+      subset of `SOURCES` (default unchanged).
+    - `viz` optionally overlays NOAA impact fields (deaths, damage,
+      tsunami flag) when `NOAA_SIG` is present.
+    - pytest coverage for `_preprocess_noaa_significant` (BC handling,
+      column renames).
+- Dependencies: D.1
