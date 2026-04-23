@@ -53,7 +53,7 @@ _MAP_TEMPLATE = """<!doctype html>
  #panel h2 { margin:0 0 6px 0; font-size:18px; }
  #panel h3 { margin:18px 0 6px 0; font-size:13px; text-transform:uppercase; letter-spacing:.05em; color:#555; }
  .row { font-size:12px; color:#333; margin-bottom: 6px; }
- .slider { margin: 18px 6px 6px 6px; }
+ .slider { margin: 36px 10px 6px 10px; }
  .legend-item { display:flex; align-items:center; gap:8px; font-size:12px; margin:2px 0; }
  .legend-swatch { width:14px; height:14px; border-radius:50%; border:1px solid #999; }
  .src-row { display:flex; align-items:flex-start; gap:6px; font-size:12px; margin: 4px 0; }
@@ -387,7 +387,7 @@ _TIMELINE_TEMPLATE = """<!doctype html>
  #panel h2 { margin:0 0 6px 0; font-size:18px; }
  #panel h3 { margin:18px 0 6px 0; font-size:13px; text-transform:uppercase; letter-spacing:.05em; color:#555; }
  .row { font-size:12px; color:#333; margin-bottom: 6px; }
- .slider { margin: 18px 6px 6px 6px; }
+ .slider { margin: 36px 10px 6px 10px; }
  .src-row { display:flex; align-items:flex-start; gap:6px; font-size:12px; margin: 4px 0; }
  .src-row .src-meta { display:flex; flex-direction:column; line-height:1.25; }
  .src-row .src-code { font-weight:600; }

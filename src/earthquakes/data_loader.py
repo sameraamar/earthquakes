@@ -77,6 +77,14 @@ SOURCES: dict[str, DataSource] = {
 
 DEFAULT_SOURCES: tuple[str, ...] = ("LOBELLO", "GAURAV2025")
 
+
+def _cache_path_for_sources(sources: tuple[str, ...]) -> Path:
+    normalized = tuple(dict.fromkeys(sources))
+    if normalized == DEFAULT_SOURCES:
+        return CACHE_PARQUET
+    suffix = "__".join(normalized)
+    return DATA_DIR / f"earthquakes__{suffix}.parquet"
+
 # Common column-name variants we want to normalize.
 _COLUMN_ALIASES = {
     "time": ["time", "date_time", "datetime", "date", "origin_time", "time (utc)"],
@@ -335,9 +343,10 @@ def load(
     - Subsequent runs read the parquet directly.
     """
     DATA_DIR.mkdir(parents=True, exist_ok=True)
+    cache_path = _cache_path_for_sources(sources)
 
-    if use_cache and CACHE_PARQUET.exists() and not refresh:
-        return pd.read_parquet(CACHE_PARQUET)
+    if use_cache and cache_path.exists() and not refresh:
+        return pd.read_parquet(cache_path)
 
     frames = [_load_one(code) for code in sources]
     df = _merge_sources(frames)
@@ -346,7 +355,7 @@ def load(
         df = df.sort_values("time").reset_index(drop=True)
 
     if use_cache:
-        df.to_parquet(CACHE_PARQUET, index=False)
+        df.to_parquet(cache_path, index=False)
 
     return df
 

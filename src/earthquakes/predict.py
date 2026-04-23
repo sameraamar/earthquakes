@@ -31,6 +31,8 @@ class PredictionReport:
     mae: float
     n_train: int
     n_test: int
+    forecast_month: pd.Timestamp
+    baseline_maes: dict[str, float]
     top_predictions: pd.DataFrame  # next-month forecast per cell, top 10
 
 
@@ -110,6 +112,24 @@ def _build_feature_panel(agg: pd.DataFrame, target: str) -> pd.DataFrame:
         for lag in LAGS:
             g[f"{target}_lag{lag}"] = g[target].shift(lag)
             g[f"count_lag{lag}"] = g["count"].shift(lag)
+            g[f"max_mag_lag{lag}"] = g["max_mag"].shift(lag)
+
+        # Leak-safe feature engineering: only prior months are used.
+        count_hist = g["count"].shift(1)
+        max_mag_hist = g["max_mag"].shift(1)
+        g["count_roll3_mean"] = count_hist.rolling(3, min_periods=1).mean()
+        g["count_roll6_mean"] = count_hist.rolling(6, min_periods=1).mean()
+        g["count_roll12_mean"] = count_hist.rolling(12, min_periods=1).mean()
+        g["count_roll6_std"] = count_hist.rolling(6, min_periods=2).std().fillna(0.0)
+        g["max_mag_roll3_mean"] = max_mag_hist.rolling(3, min_periods=1).mean()
+        g["max_mag_roll6_mean"] = max_mag_hist.rolling(6, min_periods=1).mean()
+        g["count_delta_1_3"] = g["count_lag1"] - g["count_lag3"]
+        g["count_delta_1_12"] = g["count_lag1"] - g["count_lag12"]
+        g["max_mag_delta_1_3"] = g["max_mag_lag1"] - g["max_mag_lag3"]
+        g["month_num"] = g.index.month.astype(float)
+        g["month_sin"] = np.sin(2 * np.pi * g["month_num"] / 12.0)
+        g["month_cos"] = np.cos(2 * np.pi * g["month_num"] / 12.0)
+        g["months_since_start"] = np.arange(len(g), dtype=float)
         g["target"] = g[target].shift(-1)  # next month
         g["month"] = g.index
         frames.append(g.reset_index(drop=True))
@@ -117,6 +137,37 @@ def _build_feature_panel(agg: pd.DataFrame, target: str) -> pd.DataFrame:
     if not frames:
         return pd.DataFrame()
     return pd.concat(frames, ignore_index=True)
+
+
+def _baseline_predictions(feats: pd.DataFrame, target: str) -> dict[str, pd.Series]:
+    target_lag_cols = [f"{target}_lag{lag}" for lag in LAGS if f"{target}_lag{lag}" in feats.columns]
+    baselines = {
+        "last_month": feats[f"{target}_lag1"],
+        "seasonal_12m": feats[f"{target}_lag12"],
+        "mean_lags": feats[target_lag_cols].mean(axis=1),
+    }
+    return baselines
+
+
+def _feature_columns(panel: pd.DataFrame) -> list[str]:
+    lag_cols = [c for c in panel.columns if c.endswith(tuple(f"lag{l}" for l in LAGS))]
+    engineered = [
+        "count_roll3_mean",
+        "count_roll6_mean",
+        "count_roll12_mean",
+        "count_roll6_std",
+        "max_mag_roll3_mean",
+        "max_mag_roll6_mean",
+        "count_delta_1_3",
+        "count_delta_1_12",
+        "max_mag_delta_1_3",
+        "month_sin",
+        "month_cos",
+        "months_since_start",
+        "lat_bin",
+        "lon_bin",
+    ]
+    return [c for c in lag_cols + engineered if c in panel.columns]
 
 
 def train_and_evaluate(
@@ -153,8 +204,7 @@ def train_and_evaluate(
     if panel.empty:
         raise RuntimeError("Not enough history to build lag features.")
 
-    feature_cols = [c for c in panel.columns if c.endswith(tuple(f"lag{l}" for l in LAGS))]
-    feature_cols += ["lat_bin", "lon_bin"]
+    feature_cols = _feature_columns(panel)
 
     feats = panel.dropna(subset=feature_cols + ["target"])
     if feats.empty:
@@ -168,6 +218,11 @@ def train_and_evaluate(
     model.fit(train[feature_cols], train["target"])
     preds = model.predict(test[feature_cols])
     mae = float(mean_absolute_error(test["target"], preds))
+
+    baseline_maes = {
+        name: float(mean_absolute_error(test["target"], pred_values))
+        for name, pred_values in _baseline_predictions(test, target=target).items()
+    }
 
     forecast_origin = panel["month"].max()
     latest = panel[panel["month"] == forecast_origin].dropna(subset=feature_cols).copy()
@@ -194,5 +249,7 @@ def train_and_evaluate(
         mae=mae,
         n_train=len(train),
         n_test=len(test),
+        forecast_month=latest["forecast_for"].iloc[0],
+        baseline_maes=baseline_maes,
         top_predictions=top,
     )

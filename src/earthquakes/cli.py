@@ -23,6 +23,20 @@ def _parse_max_yyyymm(value: str) -> pd.Timestamp:
     return pd.Timestamp(year=year, month=month, day=1)
 
 
+def _parse_sources(value: str) -> tuple[str, ...]:
+    codes = tuple(code.strip().upper() for code in value.split(",") if code.strip())
+    if not codes:
+        raise argparse.ArgumentTypeError("--sources requires at least one source code")
+
+    unknown = [code for code in codes if code not in data_loader.SOURCES]
+    if unknown:
+        known = ", ".join(data_loader.SOURCES)
+        raise argparse.ArgumentTypeError(
+            f"Unknown source code(s): {', '.join(unknown)}. Known: {known}"
+        )
+    return codes
+
+
 def _cmd_info(_: argparse.Namespace) -> int:
     info = data_loader.summary()
     print(json.dumps(info, indent=2, default=str))
@@ -43,17 +57,23 @@ def _cmd_viz(args: argparse.Namespace) -> int:
 
 
 def _cmd_predict(args: argparse.Namespace) -> int:
-    df = data_loader.load(refresh=args.refresh)
+    df = data_loader.load(refresh=args.refresh, sources=args.sources)
     report = predict.train_and_evaluate(
         df, target=args.target, max_month=args.max_month
     )
     units = "events / month" if report.target == "count" else "magnitude"
+    print(f"sources          : {', '.join(args.sources)}")
     print(f"target           : {report.target}  ({units})")
+    print(f"forecast month   : {report.forecast_month:%Y-%m}")
     print(f"train rows       : {report.n_train}   (cell-month samples)")
     print(f"test rows        : {report.n_test}   (last 12 months held out)")
-    print(f"MAE (holdout)    : {report.mae:.4f}   ({units})")
+    print(f"MAE (GBM)        : {report.mae:.4f}   ({units})")
+    print("Baselines (holdout MAE):")
+    print(f"  last_month     : {report.baseline_maes['last_month']:.4f}   ({units})")
+    print(f"  seasonal_12m   : {report.baseline_maes['seasonal_12m']:.4f}   ({units})")
+    print(f"  mean_lags      : {report.baseline_maes['mean_lags']:.4f}   ({units})")
     print()
-    print("Top 10 cells by predicted next-month value:")
+    print("Top 10 cells by predicted next-month value (GBM):")
     print("  region           = most common 'place' label seen in that cell")
     print("  lat_bin / lon_bin = south-west corner of a 5deg x 5deg cell")
     print("  last_observed    = most recent month with data (model input)")
@@ -95,6 +115,15 @@ def main(argv: list[str] | None = None) -> int:
     p_pred = sub.add_parser("predict", help="Train baseline forecaster + report MAE")
     p_pred.add_argument("--target", choices=["count", "max_mag"], default="count")
     p_pred.add_argument("--refresh", action="store_true", help="Re-download dataset")
+    p_pred.add_argument(
+        "--sources",
+        type=_parse_sources,
+        default=data_loader.DEFAULT_SOURCES,
+        help=(
+            "Comma-separated source codes for prediction "
+            f"(default: {','.join(data_loader.DEFAULT_SOURCES)})."
+        ),
+    )
     p_pred.add_argument(
         "--max",
         dest="max_month",
